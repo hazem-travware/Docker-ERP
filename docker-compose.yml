@@ -1,0 +1,82 @@
+version: "3.8"
+networks:
+  booking:
+services:
+  php:
+    build:
+      args:
+        user: ${USER}
+        uid: ${UID}
+      context: ./env/services/${PHPVERSION}
+    container_name: '${COMPOSE_PROJECT_NAME}-${PHPVERSION}'
+    restart: always
+    expose:
+      - "${PHP_PORT}"
+    links:
+      - database
+    volumes:
+      - ~/.ssh:/home/${USER}/.ssh
+      - ${DOCUMENT_ROOT}:/var/www/html
+      - ./env/config/php/php.ini:/usr/local/etc/php/php.ini
+      - ./env/config/php/conf.d/error_reporting.ini:/usr/local/etc/php/conf.d/error_reporting.ini
+    networks:
+      - booking
+
+  webserver:
+    build:
+      context: ./env/services/${WEB_SERVER}
+    container_name: '${COMPOSE_PROJECT_NAME}-${WEB_SERVER}'
+    restart: always
+    ports:
+      - "${HOST_PORT}:80"
+    volumes:
+      - ${DOCUMENT_ROOT}:/var/www/html
+      - ${WEB_SERVER_CONFIG}:/etc/nginx/conf.d
+      - ${WEB_SERVER_LOG_DIR}:/var/log/nginx
+    depends_on:
+      - php
+    networks:
+      - booking
+
+  database:
+    image: postgres:11
+    container_name: '${COMPOSE_PROJECT_NAME}-database'
+    restart: 'always'
+    ports:
+      - "${DATABASE_SOCKET}:5432"
+    volumes:
+      - ${postgres_entrypoint}:/docker-entrypoint-initdb.d
+      - ${DATABASE_LOG_DIR}:/var/log/postgresql
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_HOST_AUTH_METHOD: trust
+    networks:
+      - booking
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin4_container
+    restart: always
+    ports:
+      - "8888:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admintool@travware.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    networks:
+      - booking
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      
+  redis:
+    container_name: '${COMPOSE_PROJECT_NAME}-redis'
+    image: redis:latest
+    volumes:
+      - ./env/storage/redis/redis:/data
+    ports:
+      - "127.0.0.1:${HOST_MACHINE_REDIS_PORT}:6379"
+    networks:
+      - booking
+volumes:
+  pgadmin_data:
